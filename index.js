@@ -64,6 +64,23 @@ function haversineMiles(lat1, lon1, lat2, lon2) {
   return earthRadiusMiles * c;
 }
 
+function getCompassDirection(lat1, lon1, lat2, lon2) {
+  const toRad = Math.PI / 180;
+  const toDeg = 180 / Math.PI;
+  const lat1Rad = lat1 * toRad;
+  const lat2Rad = lat2 * toRad;
+  const dLon = (lon2 - lon1) * toRad;
+
+  const y = Math.sin(dLon) * Math.cos(lat2Rad);
+  const x = Math.cos(lat1Rad) * Math.sin(lat2Rad)
+    - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
+  const bearing = (Math.atan2(y, x) * toDeg + 360) % 360;
+
+  const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  const directionIndex = Math.round(bearing / 45) % directions.length;
+  return directions[directionIndex];
+}
+
 function renderNearbyCameras() {
   const nearbyMeta = document.getElementById('nearby_meta');
   const nearbyList = document.getElementById('nearby_list');
@@ -86,7 +103,8 @@ function renderNearbyCameras() {
     .filter((camera) => camera.location !== currentCamera)
     .map((camera) => ({
       camera,
-      miles: haversineMiles(origin.y, origin.x, camera.y, camera.x)
+      miles: haversineMiles(origin.y, origin.x, camera.y, camera.x),
+      direction: getCompassDirection(origin.y, origin.x, camera.y, camera.x)
     }))
     .sort((a, b) => a.miles - b.miles)
     .slice(0, 5);
@@ -102,7 +120,7 @@ function renderNearbyCameras() {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'nearby-item';
-    button.textContent = `${item.camera.location} (${item.miles.toFixed(1)} mi)`;
+    button.textContent = `${item.camera.location} (${item.direction}, ${item.miles.toFixed(1)} mi)`;
     button.addEventListener('click', function () {
       applyCameraSelection(item.camera.location, { historyMode: 'push' });
     });

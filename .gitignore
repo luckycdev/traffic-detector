@@ -1,5 +1,5 @@
 output.mp4
-yolo26n.pt
+yolo*.pt
 anaconda_projects/
 .ipynb_checkpoints/
 __pycache__/

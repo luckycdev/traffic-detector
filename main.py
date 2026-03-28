@@ -26,7 +26,7 @@ if VIDEO_SOURCE.isdigit():
     VIDEO_SOURCE = int(VIDEO_SOURCE)
 
 # YOLO 26 nano
-model = YOLO("yolo26n.pt")
+model = YOLO("yolo26s.pt")
 
 
 def normalize_video_source(source_value):
@@ -275,7 +275,7 @@ class CameraWorker:
             previous_frame_time = frame_time
 
             with model_lock:
-                results = model.predict(frame, classes=[2, 3, 5, 7, 1], verbose=False)
+                results = model.predict(frame, classes=[2, 3, 5, 7, 1], verbose=False, conf=0.15)
 
             if road_mask is None or road_mask.shape != (frame_height, frame_width):
                 road_mask = np.zeros((frame_height, frame_width), dtype=np.uint8)
