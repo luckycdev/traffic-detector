@@ -275,7 +275,12 @@ class CameraWorker:
             previous_frame_time = frame_time
 
             with model_lock:
-                results = model.predict(frame, classes=[2, 3, 5, 7, 1], verbose=False, conf=0.15)
+                results = model.track(
+                    frame,
+                    persist = True,
+                    tracker = "bytetrack.yaml",
+                    conf = 0.15
+                )
 
             if road_mask is None or road_mask.shape != (frame_height, frame_width):
                 road_mask = np.zeros((frame_height, frame_width), dtype=np.uint8)
@@ -296,97 +301,101 @@ class CameraWorker:
             class_counts = {}
 
             for result in results:
-                for box in result.boxes:
-                    x1, y1, x2, y2 = map(int, box.xyxy[0])
-                    conf = float(box.conf[0])
-                    cls = int(box.cls[0])
+                boxes = result.boxes
+                if boxes.id is not None:
+                    for box, track_id in zip(result.boxes, boxes.id):
+                        x1, y1, x2, y2 = map(int, box.xyxy[0])
+                        track_id = int(track_id.item())
+                        conf = float(box.conf[0])
+                        cls = int(box.cls[0])
 
-                    if y2 < frame_height * 0.3:
-                        continue
+                        if y2 < frame_height * 0.3:
+                            continue
 
-                    vehicle_count += 1
-                    class_name = model.names[cls]
-                    class_counts[class_name] = class_counts.get(class_name, 0) + 1
+                        vehicle_count += 1
+                        class_name = model.names[cls]
+                        class_counts[class_name] = class_counts.get(class_name, 0) + 1
 
-                    label = f"{class_name} {conf:.2f}"
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                    cv2.putText(
-                        frame,
-                        label,
-                        (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.5,
-                        (0, 255, 0),
-                        2,
-                    )
+                        label = f"{class_name} {conf:.2f}"
+                        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                        tid = str(track_id)
+                        cv2.putText(
+                            frame,
+                            tid,
+                            (x1, y1 - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.5,
+                            (0, 255, 0),
+                            2,
+                        )
 
-                    boxes_area += (x2 - x1) * (y2 - y1)
-                    road_mask[y1:y2, x1:x2] = np.maximum(road_mask[y1:y2, x1:x2], 200)
-                    road_mask_last_seen[y1:y2, x1:x2] = now
+                        boxes_area += (x2 - x1) * (y2 - y1)
+                        road_mask[y1:y2, x1:x2] = np.maximum(road_mask[y1:y2, x1:x2], 200)
+                        road_mask_last_seen[y1:y2, x1:x2] = now
 
-            road_area = np.count_nonzero(road_mask)
-            if road_area > 0 and first_mask_seen_time is None:
-                first_mask_seen_time = now
-            elif road_area == 0:
-                first_mask_seen_time = None
+                road_area = np.count_nonzero(road_mask)
+                if road_area > 0 and first_mask_seen_time is None:
+                    first_mask_seen_time = now
+                elif road_area == 0:
+                    first_mask_seen_time = None
 
-            coverage_warmup_done = (
-                first_mask_seen_time is not None and (now - first_mask_seen_time) >= 0.5
-            )
-            road_mask_percent = (road_area / frame_area) * 100 if frame_area > 0 else 0
-            road_learning_ready = road_area > frame_area * 0.05
-            raw_coverage = (boxes_area / road_area) * 100 if road_area > 0 and coverage_warmup_done else 0
-            effective_coverage = raw_coverage if road_learning_ready else 0
-            smoothed_coverage = smoothed_coverage * 0.8 + effective_coverage * 0.2
-            coverage = smoothed_coverage
+                coverage_warmup_done = (
+                    first_mask_seen_time is not None and (now - first_mask_seen_time) >= 0.5
+                )
+                road_mask_percent = (road_area / frame_area) * 100 if frame_area > 0 else 0
+                road_learning_ready = road_area > frame_area * 0.05
+                raw_coverage = (boxes_area / road_area) * 100 if road_area > 0 and coverage_warmup_done else 0
+                effective_coverage = raw_coverage if road_learning_ready else 0
+                smoothed_coverage = smoothed_coverage * 0.8 + effective_coverage * 0.2
+                coverage = smoothed_coverage
 
-            traffic_score, traffic_label = traffic_rating(class_counts, coverage)
+                traffic_score, traffic_label = traffic_rating(class_counts, coverage)
 
-            mask_colored = cv2.cvtColor(road_mask, cv2.COLOR_GRAY2BGR)
-            frame = cv2.addWeighted(frame, 1.0, mask_colored, 0.4, 0)
-#            cv2.putText(
-#                frame,
-#                f"Coverage: {coverage:.2f}%",
-#                (20, 40),
-#                cv2.FONT_HERSHEY_SIMPLEX,
-#                1,
-#                (0, 255, 255),
-#                2,
-#            )
+                mask_colored = cv2.cvtColor(road_mask, cv2.COLOR_GRAY2BGR)
+                frame = cv2.addWeighted(frame, 1.0, mask_colored, 0.4, 0)
+    #            cv2.putText(
+    #                frame,
+    #                f"Coverage: {coverage:.2f}%",
+    #                (20, 40),
+    #                cv2.FONT_HERSHEY_SIMPLEX,
+    #                1,
+    #                (0, 255, 255),
+    #                2,
+    #            )
 
-            ok, buffer = cv2.imencode(".jpg", frame)
-            if not ok:
-                continue
+                ok, buffer = cv2.imencode(".jpg", frame)
+                if not ok:
+                    continue
 
-            stats_snapshot = {
-                "vehicle_count": vehicle_count,
-                "coverage": round(coverage, 2),
-                "raw_coverage": round(raw_coverage, 2),
-                "traffic_score": round(traffic_score, 2),
-                "traffic_label": traffic_label,
-                "fps": round(smoothed_fps, 2),
-                "resolution": f"{frame_width}x{frame_height}",
-                "road_mask_percent": round(road_mask_percent, 2),
-                "boxes_area": int(boxes_area),
-                "road_area": int(road_area),
-                "frame_area": int(frame_area),
-                "road_learning_ready": bool(road_learning_ready),
-                "class_counts": class_counts,
-                "last_updated": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "selected_camera": self.camera_name,
-            }
+                stats_snapshot = {
+                    "vehicle_count": vehicle_count,
+                    "coverage": round(coverage, 2),
+                    "raw_coverage": round(raw_coverage, 2),
+                    "traffic_score": round(traffic_score, 2),
+                    "traffic_label": traffic_label,
+                    "fps": round(smoothed_fps, 2),
+                    "resolution": f"{frame_width}x{frame_height}",
+                    "road_mask_percent": round(road_mask_percent, 2),
+                    "boxes_area": int(boxes_area),
+                    "road_area": int(road_area),
+                    "frame_area": int(frame_area),
+                    "road_learning_ready": bool(road_learning_ready),
+                    "class_counts": class_counts,
+                    "last_updated": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "selected_camera": self.camera_name,
+                }
 
-            with self.lock:
-                self.latest_frame = buffer.tobytes()
-                self.latest_frame_id += 1
-                self.latest_stats = stats_snapshot
+                with self.lock:
+                    self.latest_frame = buffer.tobytes()
+                    self.latest_frame_id += 1
+                    self.latest_stats = stats_snapshot
 
-        if cam is not None:
-            cam.release()
+            if cam is not None:
+                cam.release()
 
-        with workers_lock:
-            if camera_workers.get(self.camera_name) is self:
-                camera_workers.pop(self.camera_name, None)
+            with workers_lock:
+                if camera_workers.get(self.camera_name) is self:
+                    camera_workers.pop(self.camera_name, None)
 
 
 def get_requested_camera_name():
