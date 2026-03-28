@@ -1,22 +1,9 @@
-### Building and running your application
+You need Docker, docker-compose and git setup on your machine. Refer to Docker documentation if you need any help with this. After that, run the following commands:
 
-When you're ready, start your application by running:
-`docker compose up --build`.
+`git clone https://github.com/luckycdev/traffic-detector`
 
-Your application will be available at http://localhost:5000.
+`cd [your-directory-here]`
 
-### Deploying your application to the cloud
+`docker compose up -d --build`
 
-First, build your image, e.g.: `docker build -t myapp .`.
-If your cloud uses a different CPU architecture than your development
-machine (e.g., you are on a Mac M1 and your cloud provider is amd64),
-you'll want to build the image for that platform, e.g.:
-`docker build --platform=linux/amd64 -t myapp .`.
-
-Then, push it to your registry, e.g. `docker push myregistry.com/myapp`.
-
-Consult Docker's [getting started](https://docs.docker.com/go/get-started-sharing/)
-docs for more detail on building and pushing.
-
-### References
-* [Docker's Python guide](https://docs.docker.com/language/python/)
+Wait a little bit until the setup script creates a site. After that, you can access http://localhost:5000 in your browser, and the detector should show up!
