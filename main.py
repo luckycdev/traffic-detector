@@ -10,7 +10,9 @@ from get_cams import fetch_cameras
 
 app = Flask(__name__)
 
+# default to I-70 WB At Prospect Ave
 source = "https://traveler.modot.org/tisvc/api/Tms/CameraStream/M070WBC-09-LQ"
+DEFAULT_CAMERA_NAME = "I-70 WB At Prospect Ave"
 
 VIDEO_SOURCE = os.getenv("VIDEO_SOURCE", source)
 
@@ -55,7 +57,7 @@ def extract_stream_from_html(html_value):
 
 
 def load_camera_sources():
-    camera_map = {"Default": normalize_video_source(VIDEO_SOURCE)}
+    camera_map = {}
     try:
         cameras = fetch_cameras()
         for location, data in cameras.items():
@@ -64,13 +66,27 @@ def load_camera_sources():
                 camera_map[location] = normalize_video_source(stream_url)
     except Exception as exc:
         print("Failed to load camera list:", exc)
+
+    if DEFAULT_CAMERA_NAME not in camera_map:
+        camera_map[DEFAULT_CAMERA_NAME] = normalize_video_source(source)
+
     return camera_map
 
 
 camera_sources = load_camera_sources()
 source_lock = Lock()
-active_camera = "Default"
-active_video_source = camera_sources.get(active_camera, normalize_video_source(VIDEO_SOURCE))
+active_camera = DEFAULT_CAMERA_NAME
+default_source = normalize_video_source(VIDEO_SOURCE)
+if active_camera not in camera_sources:
+    for camera_name, camera_source in camera_sources.items():
+        if camera_source == default_source:
+            active_camera = camera_name
+            break
+
+if active_camera not in camera_sources and camera_sources:
+    active_camera = next(iter(camera_sources))
+
+active_video_source = camera_sources.get(active_camera, default_source)
 
 stats_lock = Lock()
 live_stats = {
@@ -249,9 +265,9 @@ def frame_generator():
         mask_colored = cv2.cvtColor(road_mask, cv2.COLOR_GRAY2BGR)
         frame = cv2.addWeighted(frame, 1.0, mask_colored, 0.4, 0)
 
-        print("boxes_area:", boxes_area)
-        print("road_area:", road_area)
-        print("coverage:", round(coverage, 2), "\n")
+        #print("boxes_area:", boxes_area)
+        #print("road_area:", road_area)
+        #print("coverage:", round(coverage, 2), "\n")
 
         # overlay coverage on screen
         cv2.putText(
