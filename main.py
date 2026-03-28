@@ -1,64 +1,107 @@
-## Live feed with webcam code test
-# https://5fca316e7c40f.streamlock.net/live-secure/customInstance/M070WBIPC-11-LQ.stream/playlist.m3u8?wowzatokenendtime=1774660003&wowzatokenstarttime=1774656403&wowzatokenhash=BUeEDuAf-7eYF42gqKZxg2_9_vB8pSX2BY9HvMrXULM=
-#import cv2
-# Install ultralytics and relevent import statements
-!pip install ultralytics
-!pip install opencv-python
-
 import cv2
+import os
+import time
 from ultralytics import YOLO
-import numpy as np
+from flask import Flask, Response
 
+app = Flask(__name__)
 
-from IPython.display import display, clear_output
-from PIL import Image
+source = "https://5fca316e7c40f.streamlock.net/live-secure/customInstance/M070WBIPC-14-LQ.stream/playlist.m3u8?wowzatokenendtime=1774664606&wowzatokenstarttime=1774661006&wowzatokenhash=zBe77AkVpduJwWx7HAJJzpyjPEeBMvZWXaJzFhiPqoM="
 
-# Open the default camera
-#cam = cv2.VideoCapture(0)
-cam = cv2.VideoCapture("https://5fca316e7c40f.streamlock.net/live-secure/customInstance/M070WBIPC-11-LQ.stream/playlist.m3u8?wowzatokenendtime=1774660003&wowzatokenstarttime=1774656403&wowzatokenhash=BUeEDuAf-7eYF42gqKZxg2_9_vB8pSX2BY9HvMrXULM=")
+# Use webcam by setting environment variable VIDEO_SOURCE=0.
+VIDEO_SOURCE = os.getenv(
+    "VIDEO_SOURCE",
+    source,
+)
 
-# Get the default frame width and height
-frame_width = int(cam.get(cv2.CAP_PROP_FRAME_WIDTH))
-frame_height = int(cam.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-# Define the codec and create VideoWriter object
-fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-out = cv2.VideoWriter('output.mp4', fourcc, 15.0, (frame_width, frame_height))
-
-# Creating Yolo model object (currently Yolo26n)
+if VIDEO_SOURCE.isdigit():
+    VIDEO_SOURCE = int(VIDEO_SOURCE)
 model = YOLO("yolo26n.pt")
 
 
+def frame_generator():
+    cam = cv2.VideoCapture(VIDEO_SOURCE)
 
-while True:
-    ret, frame = cam.read()
+    if not cam.isOpened():
+        while True:
+            fallback = 255 * (cv2.UMat(480, 640, cv2.CV_8UC3).get() * 0)
+            cv2.putText(
+                fallback,
+                "Unable to open video source",
+                (40, 240),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.9,
+                (0, 0, 255),
+                2,
+            )
+            ok, buffer = cv2.imencode(".jpg", fallback)
+            if ok:
+                yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n\r\n"
+                    + buffer.tobytes()
+                    + b"\r\n"
+                )
+            time.sleep(0.5)
 
-    results = model.predict(frame, classes=[2,3,5,7])
+    while True:
+        ok, frame = cam.read()
+        if not ok or frame is None:
+            continue
 
-    for result in results:
-        for box in result.boxes:
-            x1, y1, x2, y2 = map(int, box.xyxy[0])
-            conf = box.conf[0]
-            cls = int(box.cls[0])
+        results = model.predict(frame, classes=[2, 3, 5, 7], verbose=False)
+        for result in results:
+            for box in result.boxes:
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                conf = float(box.conf[0])
+                cls = int(box.cls[0])
 
-            label = f"{model.names[cls]} {conf:.2f}"
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                label = f"{model.names[cls]} {conf:.2f}"
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                cv2.putText(
+                    frame,
+                    label,
+                    (x1, y1 - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (0, 255, 0),
+                    2,
+                )
 
-    # Write the frame to the output file
-    out.write(frame)
+        ok, buffer = cv2.imencode(".jpg", frame)
+        if not ok:
+            continue
 
-    # Display the captured frame
-    #cv2.imshow("Frame", frame)
+        yield (
+            b"--frame\r\n"
+            b"Content-Type: image/jpeg\r\n\r\n" + buffer.tobytes() + b"\r\n"
+        )
 
-    clear_output(wait=True)
-    display(Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)))
 
-    # Press 'q' to exit the loop
-    if cv2.waitKey(1) == ord('q'):
-        break
+@app.route("/")
+def index():
+    return """
+    <html>
+      <head>
+        <title>Traffic Detector Live</title>
+        <style>
+          body { font-family: Arial, sans-serif; background: #111; color: #eee; text-align: center; }
+          h1 { margin-top: 20px; }
+          img { max-width: 95vw; max-height: 80vh; border: 3px solid #2ecc71; border-radius: 8px; }
+        </style>
+      </head>
+      <body>
+        <h1>Traffic Detector Output</h1>
+        <img src="/video_feed" alt="Live traffic stream" />
+      </body>
+    </html>
+    """
 
-# Release the capture and writer objects
-cam.release()
-out.release()
-cv2.destroyAllWindows()
+
+@app.route("/video_feed")
+def video_feed():
+    return Response(frame_generator(), mimetype="multipart/x-mixed-replace; boundary=frame")
+
+
+if __name__ == "__main__":
+    app.run(host="127.0.0.1", port=5000, debug=False)
