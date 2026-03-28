@@ -120,6 +120,45 @@ def to_jsonable(value):
     return value
 
 
+def traffic_rating(class_counts, coverage):
+    """Calculates numerical (0-10) and text based traffic rating using formula based on vehicle coverage
+    on road, vehicle type, and number of vehicles"""
+    baseline_coverage = 6.5
+
+    adjusted_coverage = max(coverage - baseline_coverage, 0)
+    adjusted_max = 100 - baseline_coverage
+
+    car_wt = 1.0
+    motorcycle_wt = 0.5
+    bus_wt = 2.5
+    truck_wt = 3.0
+
+    car_count = class_counts.get("car", 0)
+    motorcycle_count = class_counts.get("motorcycle", 0)
+    bus_count = class_counts.get("bus", 0)
+    truck_count = class_counts.get("truck", 0)
+    total_count = car_count + motorcycle_count + bus_count + truck_count
+
+    weighted_count = (car_count * car_wt) + (motorcycle_count * motorcycle_wt) + (bus_count * bus_wt) + (truck_count * truck_wt)
+    weight_factor = weighted_count / max(total_count, 1.0)
+
+    num_traffic_score = (adjusted_coverage / adjusted_max) * weight_factor
+
+    # scale to 0-10 range
+    num_traffic_score_0_to_10 = min(num_traffic_score * 10, 10)
+
+    if num_traffic_score_0_to_10 <= 2.5:
+        text_traffic_score = "Light Traffic"
+    elif num_traffic_score_0_to_10 <= 5.0:
+        text_traffic_score = "Moderate Traffic"
+    elif num_traffic_score_0_to_10 <= 7.5:
+        text_traffic_score = "Heavy Traffic"
+    else:
+        text_traffic_score = "Very Heavy Traffic"
+
+    return num_traffic_score_0_to_10, text_traffic_score
+
+
 def frame_generator():
     cam = None
     current_source = None
@@ -269,11 +308,15 @@ def frame_generator():
         smoothed_coverage = smoothed_coverage * 0.8 + effective_coverage * 0.2
         coverage = smoothed_coverage
 
+        traffic_score, traffic_label = traffic_rating(class_counts, coverage)
+
         with stats_lock:
             live_stats.update(
                 {
                     "vehicle_count": vehicle_count,
                     "coverage": round(coverage, 2),
+                    "traffic_score": round(traffic_score, 2),
+                    "traffic_label": traffic_label,
                     "raw_coverage": round(raw_coverage, 2),
                     "road_learned_percent": round(road_learned_percent, 2),
                     "boxes_area": int(boxes_area),
@@ -288,10 +331,6 @@ def frame_generator():
         # display road mask
         mask_colored = cv2.cvtColor(road_mask, cv2.COLOR_GRAY2BGR)
         frame = cv2.addWeighted(frame, 1.0, mask_colored, 0.4, 0)
-
-        #print("boxes_area:", boxes_area)
-        #print("road_area:", road_area)
-        #print("coverage:", round(coverage, 2), "\n")
 
         # overlay coverage on screen
         cv2.putText(
