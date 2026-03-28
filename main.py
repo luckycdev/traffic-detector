@@ -8,6 +8,7 @@ from flask import Flask, Response, jsonify, request, send_from_directory
 import numpy as np
 from threading import Lock, Thread
 from get_cams import fetch_cameras
+from maps import load_camera_points
 
 app = Flask(__name__)
 
@@ -459,6 +460,21 @@ def cameras():
     return jsonify(
         {
             "cameras": list(camera_sources.keys()),
+            "selected_camera": default_camera_name,
+        }
+    )
+
+
+@app.route("/map_cameras")
+def map_cameras():
+    try:
+        points = load_camera_points(allowed_locations=camera_sources.keys())
+    except Exception as exc:
+        return jsonify({"error": f"Failed to load map cameras: {exc}"}), 500
+
+    return jsonify(
+        {
+            "cameras": points,
             "selected_camera": default_camera_name,
         }
     )

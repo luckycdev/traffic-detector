@@ -86,3 +86,21 @@ img {
 .controls button {
     cursor: pointer;
 }
+
+.map-section {
+    max-width: 1000px;
+    margin: 18px auto 0;
+    text-align: left;
+}
+
+.map-section h3 {
+    margin: 0 0 8px;
+}
+
+#camera_map {
+    height: 420px;
+    width: 100%;
+    border: 1px solid #333;
+    border-radius: 8px;
+    overflow: hidden;
+}

@@ -11,7 +11,9 @@ def fetch_cameras():
     for cam in cams:
         location = cam.get("location")
         cam_dict[location] = {
-            "html": cam.get("html")
+            "html": cam.get("html"),
+            "x": cam.get("x"),
+            "y": cam.get("y")
         }
     
     return cam_dict

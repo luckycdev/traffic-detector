@@ -3,6 +3,8 @@ let statsTimerId = null;
 let consecutiveStatsFailures = 0;
 const STATS_SUCCESS_INTERVAL_MS = 200;
 const STATS_MAX_BACKOFF_MS = 5000;
+let mapInstance = null;
+let mapLayer = null;
 
 function updateVideoSource(cameraName) {
   const streamImage = document.getElementById('video_feed');
@@ -20,6 +22,67 @@ function setCameraInUrl(cameraName) {
   params.set('camera', cameraName);
   const nextUrl = `${window.location.pathname}?${params.toString()}`;
   window.history.replaceState({}, '', nextUrl);
+}
+
+function buildCameraUrl(cameraName) {
+  const encoded = encodeURIComponent(cameraName || '').replace(/%20/g, '+');
+  return `http://127.0.0.1:5000/?camera=${encoded}`;
+}
+
+async function loadMapCameras() {
+  try {
+    const response = await fetch('/map_cameras', { cache: 'no-store' });
+    if (!response.ok) return;
+    const payload = await response.json();
+    const points = Array.isArray(payload.cameras) ? payload.cameras : [];
+    if (!points.length) return;
+
+    if (!mapInstance) {
+      mapInstance = L.map('camera_map', { preferCanvas: true }).setView([38.5733, -92.6041], 7);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+      }).addTo(mapInstance);
+      mapLayer = L.layerGroup().addTo(mapInstance);
+    }
+
+    mapLayer.clearLayers();
+    const bounds = [];
+    const renderer = L.canvas({ padding: 0.5 });
+
+    for (const camera of points) {
+      if (typeof camera.x !== 'number' || typeof camera.y !== 'number') continue;
+
+      const marker = L.circleMarker([camera.y, camera.x], {
+        renderer,
+        radius: 5,
+        color: '#0f172a',
+        weight: 1,
+        fillColor: '#22c55e',
+        fillOpacity: 0.9
+      });
+
+      marker.bindTooltip(camera.location || 'Camera', {
+        direction: 'top',
+        offset: [0, -6],
+        opacity: 0.95
+      });
+
+      marker.on('click', function () {
+        const target = buildCameraUrl(camera.location || '');
+        window.location.href = target;
+      });
+
+      marker.addTo(mapLayer);
+      bounds.push([camera.y, camera.x]);
+    }
+
+    if (bounds.length) {
+      mapInstance.fitBounds(bounds, { padding: [20, 20] });
+    }
+  } catch (error) {
+    console.error('Failed to load map cameras:', error);
+  }
 }
 
 async function loadCameras() {
@@ -133,6 +196,7 @@ async function scheduleStatsRefresh() {
 
 document.getElementById('camera_apply').addEventListener('click', switchCamera);
 loadCameras();
+loadMapCameras();
 if (!statsTimerId) {
   scheduleStatsRefresh();
 }
