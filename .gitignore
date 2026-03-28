@@ -2,3 +2,4 @@ output.mp4
 yolo26n.pt
 anaconda_projects/
 .ipynb_checkpoints/
+__pycache__/

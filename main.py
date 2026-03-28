@@ -343,15 +343,15 @@ class CameraWorker:
 
             mask_colored = cv2.cvtColor(road_mask, cv2.COLOR_GRAY2BGR)
             frame = cv2.addWeighted(frame, 1.0, mask_colored, 0.4, 0)
-            cv2.putText(
-                frame,
-                f"Coverage: {coverage:.2f}%",
-                (20, 40),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                1,
-                (0, 255, 255),
-                2,
-            )
+#            cv2.putText(
+#                frame,
+#                f"Coverage: {coverage:.2f}%",
+#                (20, 40),
+#                cv2.FONT_HERSHEY_SIMPLEX,
+#                1,
+#                (0, 255, 255),
+#                2,
+#            )
 
             ok, buffer = cv2.imencode(".jpg", frame)
             if not ok:
