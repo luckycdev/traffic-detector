@@ -7,11 +7,26 @@ let mapInstance = null;
 let mapLayer = null;
 let mapCameraPoints = [];
 let mapCameraByName = {};
+let activeVideoCamera = null;
 
 function updateVideoSource(cameraName) {
   const streamImage = document.getElementById('video_feed');
   if (!streamImage || !cameraName) return;
+  activeVideoCamera = cameraName;
   streamImage.src = `/video_feed?camera=${encodeURIComponent(cameraName)}&t=${Date.now()}`;
+}
+
+function clearVideoSource() {
+  const streamImage = document.getElementById('video_feed');
+  if (!streamImage) return;
+  activeVideoCamera = null;
+  streamImage.removeAttribute('src');
+}
+
+function setCameraLoadingVisible(isVisible) {
+  const cameraLoading = document.getElementById('camera_loading');
+  if (!cameraLoading) return;
+  cameraLoading.style.display = isVisible ? 'block' : 'none';
 }
 
 function getCameraFromUrl() {
@@ -100,12 +115,18 @@ function applyCameraSelection(cameraName, options = {}) {
   if (!cameraName) return;
   currentCamera = cameraName;
   setCameraInUrl(cameraName, historyMode);
-  updateVideoSource(cameraName);
+  clearVideoSource();
 
   const cameraSelect = document.getElementById('camera_select');
   if (cameraSelect) {
     cameraSelect.value = cameraName;
   }
+
+  const resolution = document.getElementById('resolution');
+  if (resolution) {
+    resolution.textContent = '-';
+  }
+  setCameraLoadingVisible(true);
 
   const cameraStatus = document.getElementById('camera_status');
   if (cameraStatus) {
@@ -226,7 +247,15 @@ async function refreshStats() {
 
     document.getElementById('vehicle_count').textContent = data.vehicle_count;
     document.getElementById('fps').textContent = Number(data.fps || 0).toFixed(2);
-    document.getElementById('resolution').textContent = data.resolution || '-';
+    const isResolutionLoading = data.resolution === null || data.resolution === '-';
+    const resolutionText = isResolutionLoading ? '-' : (data.resolution || '-');
+    document.getElementById('resolution').textContent = resolutionText;
+    setCameraLoadingVisible(isResolutionLoading);
+
+    if (!isResolutionLoading && currentCamera && activeVideoCamera !== currentCamera) {
+      updateVideoSource(currentCamera);
+    }
+
     document.getElementById('traffic_score').textContent = data.traffic_score.toFixed(2);
     document.getElementById('traffic_label').textContent = data.traffic_label || '-';
     document.getElementById('coverage').textContent = `${data.coverage.toFixed(2)}%`;

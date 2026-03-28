@@ -18,6 +18,11 @@ img {
     border-radius: 8px;
 }
 
+.camera-loading {
+    margin: 10px auto 6px;
+    font-size: 1rem;
+}
+
 .stats-wrap {
     max-width: 1000px;
     margin: 16px auto 0;

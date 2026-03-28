@@ -165,7 +165,7 @@ def get_empty_stats(camera_name):
         "coverage": 0.0,
         "raw_coverage": 0.0,
         "fps": 0.0,
-        "resolution": "-",
+        "resolution": None,
         "road_mask_percent": 0.0,
         "boxes_area": 0,
         "road_area": 0,
@@ -505,14 +505,9 @@ def select_camera():
 @app.route("/stats")
 def stats():
     camera_name = get_requested_camera_name()
-    worker = get_existing_worker(camera_name)
-    if worker is None:
-        snapshot = get_empty_stats(camera_name)
-        snapshot["traffic_score"] = 0.0
-        snapshot["traffic_label"] = "Light Traffic"
-    else:
-        with worker.lock:
-            snapshot = dict(worker.latest_stats)
+    worker = get_or_create_worker(camera_name)
+    with worker.lock:
+        snapshot = dict(worker.latest_stats)
 
     if "traffic_score" not in snapshot:
         snapshot["traffic_score"] = 0.0

@@ -3,3 +3,4 @@ ultralytics
 flask
 selenium
 numpy
+requests
