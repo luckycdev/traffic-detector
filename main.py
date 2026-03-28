@@ -165,7 +165,7 @@ def get_empty_stats(camera_name):
         "raw_coverage": 0.0,
         "fps": 0.0,
         "resolution": "-",
-        "road_learned_percent": 0.0,
+        "road_mask_percent": 0.0,
         "boxes_area": 0,
         "road_area": 0,
         "frame_area": 0,
@@ -274,7 +274,7 @@ class CameraWorker:
             previous_frame_time = frame_time
 
             with model_lock:
-                results = model.predict(frame, classes=[2, 3, 5, 7], verbose=False)
+                results = model.predict(frame, classes=[2, 3, 5, 7, 1], verbose=False)
 
             if road_mask is None or road_mask.shape != (frame_height, frame_width):
                 road_mask = np.zeros((frame_height, frame_width), dtype=np.uint8)
@@ -332,7 +332,7 @@ class CameraWorker:
             coverage_warmup_done = (
                 first_mask_seen_time is not None and (now - first_mask_seen_time) >= 0.5
             )
-            road_learned_percent = (road_area / frame_area) * 100 if frame_area > 0 else 0
+            road_mask_percent = (road_area / frame_area) * 100 if frame_area > 0 else 0
             road_learning_ready = road_area > frame_area * 0.05
             raw_coverage = (boxes_area / road_area) * 100 if road_area > 0 and coverage_warmup_done else 0
             effective_coverage = raw_coverage if road_learning_ready else 0
@@ -365,7 +365,7 @@ class CameraWorker:
                 "traffic_label": traffic_label,
                 "fps": round(smoothed_fps, 2),
                 "resolution": f"{frame_width}x{frame_height}",
-                "road_learned_percent": round(road_learned_percent, 2),
+                "road_mask_percent": round(road_mask_percent, 2),
                 "boxes_area": int(boxes_area),
                 "road_area": int(road_area),
                 "frame_area": int(frame_area),

@@ -79,9 +79,9 @@ async function refreshStats() {
     document.getElementById('traffic_score').textContent = data.traffic_score.toFixed(2);
     document.getElementById('traffic_label').textContent = data.traffic_label || '-';
     document.getElementById('coverage').textContent = `${data.coverage.toFixed(2)}%`;
-    document.getElementById('raw_coverage').textContent = `${data.raw_coverage.toFixed(2)}%`;
+    //document.getElementById('raw_coverage').textContent = `${data.raw_coverage.toFixed(2)}%`;
     //document.getElementById('road_learning_ready').textContent = data.road_learning_ready ? 'Ready' : 'Not ready';
-    document.getElementById('road_learned_percent').textContent = `${data.road_learned_percent.toFixed(2)}%`;
+    document.getElementById('road_mask_percent').textContent = `${data.road_mask_percent.toFixed(2)}%`;
     document.getElementById('last_updated').textContent = data.last_updated || '-';
 
     const classList = document.getElementById('class_counts');
@@ -96,7 +96,15 @@ async function refreshStats() {
       entries.sort((a, b) => b[1] - a[1]);
       for (const [name, count] of entries) {
         const li = document.createElement('li');
-        li.textContent = `${name}: ${count}`;
+        if(count == 1) {
+          li.textContent = `${count} ${name}`;
+        }
+        else if(name === 'bus') {
+          li.textContent = `${count} ${name}es`;
+        }
+        else {
+          li.textContent = `${count} ${name}s`;
+        }
         classList.appendChild(li);
       }
     }
