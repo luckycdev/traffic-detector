@@ -5,6 +5,8 @@ const STATS_SUCCESS_INTERVAL_MS = 200;
 const STATS_MAX_BACKOFF_MS = 5000;
 let mapInstance = null;
 let mapLayer = null;
+let mapCameraPoints = [];
+let mapCameraByName = {};
 
 function updateVideoSource(cameraName) {
   const streamImage = document.getElementById('video_feed');
@@ -17,16 +19,100 @@ function getCameraFromUrl() {
   return params.get('camera');
 }
 
-function setCameraInUrl(cameraName) {
+function setCameraInUrl(cameraName, historyMode = 'replace') {
   const params = new URLSearchParams(window.location.search);
   params.set('camera', cameraName);
   const nextUrl = `${window.location.pathname}?${params.toString()}`;
-  window.history.replaceState({}, '', nextUrl);
+
+  if (`${window.location.pathname}${window.location.search}` === nextUrl) {
+    return;
+  }
+
+  if (historyMode === 'push') {
+    window.history.pushState({}, '', nextUrl);
+    return;
+  }
+
+  if (historyMode === 'replace') {
+    window.history.replaceState({}, '', nextUrl);
+  }
 }
 
-function buildCameraUrl(cameraName) {
-  const encoded = encodeURIComponent(cameraName || '').replace(/%20/g, '+');
-  return `http://127.0.0.1:5000/?camera=${encoded}`;
+function haversineMiles(lat1, lon1, lat2, lon2) {
+  const toRad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * toRad;
+  const dLon = (lon2 - lon1) * toRad;
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const earthRadiusMiles = 3958.8;
+  return earthRadiusMiles * c;
+}
+
+function renderNearbyCameras() {
+  const nearbyMeta = document.getElementById('nearby_meta');
+  const nearbyList = document.getElementById('nearby_list');
+  if (!nearbyMeta || !nearbyList) return;
+
+  nearbyList.innerHTML = '';
+
+  if (!currentCamera || !mapCameraPoints.length) {
+    nearbyMeta.textContent = 'Nearby cameras are unavailable yet.';
+    return;
+  }
+
+  const origin = mapCameraByName[currentCamera];
+  if (!origin) {
+    nearbyMeta.textContent = 'No map location found for current camera.';
+    return;
+  }
+
+  const nearest = mapCameraPoints
+    .filter((camera) => camera.location !== currentCamera)
+    .map((camera) => ({
+      camera,
+      miles: haversineMiles(origin.y, origin.x, camera.y, camera.x)
+    }))
+    .sort((a, b) => a.miles - b.miles)
+    .slice(0, 5);
+
+  if (!nearest.length) {
+    nearbyMeta.textContent = 'No nearby cameras found.';
+    return;
+  }
+
+  nearbyMeta.textContent = `Nearest to ${currentCamera}`;
+
+  for (const item of nearest) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'nearby-item';
+    button.textContent = `${item.camera.location} (${item.miles.toFixed(1)} mi)`;
+    button.addEventListener('click', function () {
+      applyCameraSelection(item.camera.location, { historyMode: 'push' });
+    });
+    nearbyList.appendChild(button);
+  }
+}
+
+function applyCameraSelection(cameraName, options = {}) {
+  const historyMode = options.historyMode || 'replace';
+  if (!cameraName) return;
+  currentCamera = cameraName;
+  setCameraInUrl(cameraName, historyMode);
+  updateVideoSource(cameraName);
+
+  const cameraSelect = document.getElementById('camera_select');
+  if (cameraSelect) {
+    cameraSelect.value = cameraName;
+  }
+
+  const cameraStatus = document.getElementById('camera_status');
+  if (cameraStatus) {
+    cameraStatus.textContent = `Current: ${cameraName}`;
+  }
+
+  renderNearbyCameras();
 }
 
 async function loadMapCameras() {
@@ -36,6 +122,13 @@ async function loadMapCameras() {
     const payload = await response.json();
     const points = Array.isArray(payload.cameras) ? payload.cameras : [];
     if (!points.length) return;
+    mapCameraPoints = points;
+    mapCameraByName = {};
+    for (const point of points) {
+      if (point && typeof point.location === 'string') {
+        mapCameraByName[point.location] = point;
+      }
+    }
 
     if (!mapInstance) {
       mapInstance = L.map('camera_map', { preferCanvas: true }).setView([38.5733, -92.6041], 7);
@@ -69,8 +162,8 @@ async function loadMapCameras() {
       });
 
       marker.on('click', function () {
-        const target = buildCameraUrl(camera.location || '');
-        window.location.href = target;
+        applyCameraSelection(camera.location || '', { historyMode: 'push' });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       });
 
       marker.addTo(mapLayer);
@@ -80,6 +173,8 @@ async function loadMapCameras() {
     if (bounds.length) {
       mapInstance.fitBounds(bounds, { padding: [20, 20] });
     }
+
+    renderNearbyCameras();
   } catch (error) {
     console.error('Failed to load map cameras:', error);
   }
@@ -106,11 +201,7 @@ async function loadCameras() {
       : payload.selected_camera;
 
     if (initialCamera) {
-      currentCamera = initialCamera;
-      cameraSelect.value = initialCamera;
-      setCameraInUrl(initialCamera);
-      updateVideoSource(initialCamera);
-      document.getElementById('camera_status').textContent = `Current: ${initialCamera}`;
+      applyCameraSelection(initialCamera, { historyMode: 'replace' });
     }
   } catch (error) {
     console.error('Failed to load cameras:', error);
@@ -122,10 +213,7 @@ async function switchCamera() {
   const selected = cameraSelect.value;
   if (!selected) return;
 
-  currentCamera = selected;
-  setCameraInUrl(selected);
-  updateVideoSource(selected);
-  document.getElementById('camera_status').textContent = `Current: ${selected}`;
+  applyCameraSelection(selected, { historyMode: 'push' });
 }
 
 async function refreshStats() {
@@ -193,6 +281,19 @@ async function scheduleStatsRefresh() {
   const nextDelay = getNextStatsDelay(success);
   statsTimerId = setTimeout(scheduleStatsRefresh, nextDelay);
 }
+
+window.addEventListener('popstate', function () {
+  const cameraFromUrl = getCameraFromUrl();
+  const cameraSelect = document.getElementById('camera_select');
+  if (!cameraFromUrl || !cameraSelect) return;
+
+  const exists = Array.from(cameraSelect.options).some(function (option) {
+    return option.value === cameraFromUrl;
+  });
+  if (!exists) return;
+
+  applyCameraSelection(cameraFromUrl, { historyMode: 'none' });
+});
 
 document.getElementById('camera_apply').addEventListener('click', switchCamera);
 loadCameras();

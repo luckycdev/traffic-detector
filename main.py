@@ -406,6 +406,17 @@ def get_or_create_worker(camera_name):
     return worker
 
 
+def get_existing_worker(camera_name):
+    with workers_lock:
+        worker = camera_workers.get(camera_name)
+        if worker is None:
+            return None
+        if not worker.thread.is_alive():
+            camera_workers.pop(camera_name, None)
+            return None
+        return worker
+
+
 def stream_worker_frames(worker):
     last_sent_frame_id = -1
     worker.add_viewer()
@@ -494,9 +505,20 @@ def select_camera():
 @app.route("/stats")
 def stats():
     camera_name = get_requested_camera_name()
-    worker = get_or_create_worker(camera_name)
-    with worker.lock:
-        snapshot = dict(worker.latest_stats)
+    worker = get_existing_worker(camera_name)
+    if worker is None:
+        snapshot = get_empty_stats(camera_name)
+        snapshot["traffic_score"] = 0.0
+        snapshot["traffic_label"] = "Light Traffic"
+    else:
+        with worker.lock:
+            snapshot = dict(worker.latest_stats)
+
+    if "traffic_score" not in snapshot:
+        snapshot["traffic_score"] = 0.0
+    if "traffic_label" not in snapshot:
+        snapshot["traffic_label"] = "Light Traffic"
+
     response = jsonify(to_jsonable(snapshot))
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response.headers["Pragma"] = "no-cache"

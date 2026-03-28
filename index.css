@@ -87,6 +87,40 @@ img {
     cursor: pointer;
 }
 
+.nearby-section {
+    max-width: 1000px;
+    margin: 14px auto 0;
+    text-align: left;
+    background: #1b1b1b;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.nearby-section h3 {
+    margin: 0 0 6px;
+}
+
+.nearby-list {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.nearby-item {
+    background: #0f172a;
+    color: #e2e8f0;
+    border: 1px solid #334155;
+    border-radius: 999px;
+    padding: 6px 10px;
+    cursor: pointer;
+}
+
+.nearby-item:hover {
+    border-color: #22c55e;
+}
+
 .map-section {
     max-width: 1000px;
     margin: 18px auto 0;
