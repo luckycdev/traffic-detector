@@ -7,20 +7,13 @@ from ultralytics import YOLO
 from flask import Flask, Response, jsonify, request, send_from_directory
 import numpy as np
 from threading import Lock, Thread
+from config import SERVER_HOST, SERVER_PORT, DEFAULT_STREAM_SOURCE, DEFAULT_CAMERA_NAME
 from get_cams import fetch_cameras
 from maps import load_camera_points
 
 app = Flask(__name__)
 
-# server
-url = '127.0.0.1'
-port = '5000'
-
-# default to I-70 WB Past Van Brunt Blvd
-source = "https://traveler.modot.org/tisvc/api/Tms/CameraStream/M070WBIPC-14-LQ"
-DEFAULT_CAMERA_NAME = "I-70 WB Past Van Brunt Blvd"
-
-VIDEO_SOURCE = os.getenv("VIDEO_SOURCE", source)
+VIDEO_SOURCE = os.getenv("VIDEO_SOURCE", DEFAULT_STREAM_SOURCE)
 
 if VIDEO_SOURCE.isdigit():
     VIDEO_SOURCE = int(VIDEO_SOURCE)
@@ -75,7 +68,7 @@ def load_camera_sources():
         print("Failed to load camera list:", exc)
 
     if DEFAULT_CAMERA_NAME not in camera_map:
-        camera_map[DEFAULT_CAMERA_NAME] = normalize_video_source(source)
+        camera_map[DEFAULT_CAMERA_NAME] = normalize_video_source(DEFAULT_STREAM_SOURCE)
 
     return camera_map
 
@@ -552,5 +545,5 @@ def stats():
 
 if __name__ == "__main__":
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
-    print(f"Server running at http://{url}:{port}", flush=True)
-    app.run(host=url, port=int(port), debug=False)
+    print(f"Server running at http://{SERVER_HOST}:{SERVER_PORT}", flush=True)
+    app.run(host=SERVER_HOST, port=int(SERVER_PORT), debug=False)

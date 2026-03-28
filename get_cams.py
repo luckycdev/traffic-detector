@@ -1,9 +1,8 @@
 import requests
-
-URL = "https://traveler.modot.org/timconfig/feed/desktop/StreamingCams2.json"
+from config import CAMERAS_JSON_URL
 
 def fetch_cameras():
-    response = requests.get(URL)
+    response = requests.get(CAMERAS_JSON_URL)
     response.raise_for_status()  # will raise error if request fails
     cams = response.json()
     

@@ -1,0 +1,6 @@
+SERVER_HOST = "0.0.0.0"
+SERVER_PORT = 5000
+
+DEFAULT_STREAM_SOURCE = "https://traveler.modot.org/tisvc/api/Tms/CameraStream/K070EBIPC-14-LQ"
+DEFAULT_CAMERA_NAME = "I-70 EB At 18th St Expressway"
+CAMERAS_JSON_URL = "https://traveler.modot.org/timconfig/feed/desktop/StreamingCams2.json"
