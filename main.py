@@ -22,6 +22,10 @@ model = YOLO("yolo26n.pt")
 def frame_generator():
     cam = cv2.VideoCapture(VIDEO_SOURCE)
 
+    frame_width = int(cam.get(cv2.CAP_PROP_FRAME_WIDTH)) or 1280
+    frame_height = int(cam.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 720
+    fps = cam.get(cv2.CAP_PROP_FPS)
+
     if not cam.isOpened():
         while True:
             fallback = 255 * (cv2.UMat(480, 640, cv2.CV_8UC3).get() * 0)
