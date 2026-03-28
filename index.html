@@ -1,0 +1,29 @@
+<html>
+  <head>
+    <title>Hawk Eye Traffic Detector</title>
+    <link rel="stylesheet" href="/index.css" />
+  </head>
+  <body>
+    <h1>Hawk Eye Traffic Detector</h1>
+    <div class="controls">
+      <label for="camera_select">Camera:</label>
+      <select id="camera_select"></select>
+      <button id="camera_apply" type="button">Switch Camera</button>
+      <span id="camera_status" class="muted"></span>
+    </div>
+    <img src="/video_feed" alt="Live traffic stream" />
+    <div class="stats-wrap">
+      <div class="stat-card"><div class="stat-title">Vehicles (Current Frame)</div><div class="stat-value" id="vehicle_count">0</div></div>
+      <div class="stat-card"><div class="stat-title">Smoothed Coverage</div><div class="stat-value" id="coverage">0.00%</div></div>
+      <div class="stat-card"><div class="stat-title">Raw Coverage</div><div class="stat-value" id="raw_coverage">0.00%</div></div>
+    </div>
+    <div class="detail-panel">
+      <div><strong>Road Learning:</strong> <span id="road_learning_ready">Not ready</span></div>
+      <div><strong>Total Road Learned:</strong> <span id="road_learned_percent">0.00%</span></div>
+      <div><strong>Last Updated:</strong> <span id="last_updated" class="muted">-</span></div>
+      <div style="margin-top: 6px;"><strong>Detected Vehicle Types</strong></div>
+      <ul id="class_counts" class="class-list"></ul>
+    </div>
+    <script src="/index.js"></script>
+  </body>
+</html>
