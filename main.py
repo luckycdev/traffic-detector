@@ -22,9 +22,10 @@ model = YOLO("yolo26n.pt")
 def frame_generator():
     cam = cv2.VideoCapture(VIDEO_SOURCE)
 
-    frame_width = int(cam.get(cv2.CAP_PROP_FRAME_WIDTH)) or 1280
-    frame_height = int(cam.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 720
-    fps = cam.get(cv2.CAP_PROP_FPS)
+    frame_width = int(cam.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cam.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    frame_area = frame_width * frame_height
+    fps = int(cam.get(cv2.CAP_PROP_FPS))
 
     if not cam.isOpened():
         while True:
@@ -54,7 +55,10 @@ def frame_generator():
             continue
 
         results = model.predict(frame, classes=[2, 3, 5, 7], verbose=False)
+
+        coverage = 0
         for result in results:
+            boxes_area = 0
             for box in result.boxes:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 conf = float(box.conf[0])
@@ -71,7 +75,12 @@ def frame_generator():
                     (0, 255, 0),
                     2,
                 )
-
+                print(f"x1: {x1}, x2: {x2}, y1: {y1}, y2: {y2}")
+                boxes_area += (x2 - x1) * (y2 - y1)
+            coverage = (boxes_area / frame_area) * 100
+            print(boxes_area)
+            print(frame_area)
+            print(round(coverage, 2), "\n")
         ok, buffer = cv2.imencode(".jpg", frame)
         if not ok:
             continue
