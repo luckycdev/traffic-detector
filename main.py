@@ -130,6 +130,9 @@ def frame_generator():
 
     smoothed_coverage = 0
 
+    mask_fade_start_time = time.time()
+    first_mask_seen_time = None
+
     while True:
         with source_lock:
             desired_source = active_video_source
@@ -145,6 +148,8 @@ def frame_generator():
             frame_area = frame_width * frame_height
             road_mask = None
             smoothed_coverage = 0
+            mask_fade_start_time = time.time()
+            first_mask_seen_time = None
             with stats_lock:
                 live_stats["frame_area"] = int(frame_area)
                 live_stats["selected_camera"] = desired_camera
@@ -195,10 +200,14 @@ def frame_generator():
 
         if road_mask is None or road_mask.shape != (frame_height, frame_width):
             road_mask = np.zeros((frame_height, frame_width), dtype=np.uint8)
+            mask_fade_start_time = time.time()
+            first_mask_seen_time = None
 
-        # fade old mask (prevents whole frame becoming road)
-        road_mask = np.clip(road_mask * 0.95, 0, 255).astype(np.uint8)
-        road_mask[road_mask < 5] = 0
+        # fade old mask after 5 seconds -- TODO: could show that traffic is heavy if for example only one lane has cars in it
+        elapsed_time = time.time() - mask_fade_start_time
+        if elapsed_time > 5:
+            road_mask = np.clip(road_mask * 0.95, 0, 255).astype(np.uint8)
+            road_mask[road_mask < 5] = 0
 
         boxes_area = 0
         vehicle_count = 0
@@ -238,9 +247,16 @@ def frame_generator():
                 road_mask[y1:y2, x1:x2] = np.maximum(road_mask[y1:y2, x1:x2], 200)
 
         road_area = np.count_nonzero(road_mask)
+        now = time.time()
+        if road_area > 0 and first_mask_seen_time is None:
+            first_mask_seen_time = now
+
+        coverage_warmup_done = (
+            first_mask_seen_time is not None and (now - first_mask_seen_time) >= 0.5
+        )
         road_learned_percent = (road_area / frame_area) * 100 if frame_area > 0 else 0
         road_learning_ready = road_area > frame_area * 0.05
-        raw_coverage = (boxes_area / road_area) * 100 if road_area > 0 else 0
+        raw_coverage = (boxes_area / road_area) * 100 if road_area > 0 and coverage_warmup_done else 0
         effective_coverage = raw_coverage if road_learning_ready else 0
         smoothed_coverage = smoothed_coverage * 0.8 + effective_coverage * 0.2
         coverage = smoothed_coverage
