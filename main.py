@@ -8,9 +8,17 @@ from ultralytics import YOLO
 from flask import Flask, Response, jsonify, request, send_from_directory
 import numpy as np
 from threading import Lock, Thread
-from config import SERVER_HOST, SERVER_PORT, DEFAULT_STREAM_SOURCE, DEFAULT_CAMERA_NAME
+from dotenv import load_dotenv
 from get_cams import fetch_cameras
 from maps import load_camera_points
+
+load_dotenv()
+
+SERVER_HOST = os.getenv("SERVER_HOST", "0.0.0.0")
+SERVER_PORT = os.getenv("SERVER_PORT", "5050")
+DEFAULT_STREAM_SOURCE = os.getenv("DEFAULT_STREAM_SOURCE", "0")
+DEFAULT_CAMERA_NAME = os.getenv("DEFAULT_CAMERA_NAME", "Default Camera")
+YOLO_MODEL = os.getenv("YOLO_MODEL", "yolo26n.pt")
 
 app = Flask(__name__)
 
@@ -20,7 +28,7 @@ if VIDEO_SOURCE.isdigit():
     VIDEO_SOURCE = int(VIDEO_SOURCE)
 
 # YOLO 26 nano
-model = YOLO("yolo26s.pt")
+model = YOLO(YOLO_MODEL)
 
 
 def normalize_video_source(source_value):
