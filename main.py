@@ -7,11 +7,35 @@ from ultralytics import YOLO
 from flask import Flask, Response, jsonify, request, send_from_directory
 import numpy as np
 from threading import Lock, Thread
-from config import SERVER_HOST, SERVER_PORT, DEFAULT_STREAM_SOURCE, DEFAULT_CAMERA_NAME
 from get_cams import fetch_cameras
 from maps import load_camera_points
 
+
+def load_env_file(env_filename=".env"):
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), env_filename)
+    if not os.path.exists(env_path):
+        return
+
+    with open(env_path, "r", encoding="utf-8") as env_file:
+        for raw_line in env_file:
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+load_env_file()
+
 app = Flask(__name__)
+
+SERVER_HOST = os.getenv("SERVER_HOST", "0.0.0.0")
+SERVER_PORT = int(os.getenv("SERVER_PORT", "5050"))
+DEFAULT_STREAM_SOURCE = os.getenv(
+    "DEFAULT_STREAM_SOURCE",
+    "https://traveler.modot.org/tisvc/api/Tms/CameraStream/K070EBIPC-14-LQ",
+)
+DEFAULT_CAMERA_NAME = os.getenv("DEFAULT_CAMERA_NAME", "I-70 EB At 18th St Expressway")
 
 VIDEO_SOURCE = os.getenv("VIDEO_SOURCE", DEFAULT_STREAM_SOURCE)
 
@@ -272,7 +296,8 @@ class CameraWorker:
                     frame,
                     persist = True,
                     tracker = "bytetrack.yaml",
-                    conf = 0.15
+                    conf = 0.15,
+                    classes=[2,1,3,5,7]
                 )
 
             if road_mask is None or road_mask.shape != (frame_height, frame_width):
@@ -546,4 +571,4 @@ def stats():
 if __name__ == "__main__":
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
     print(f"Server running at http://{SERVER_HOST}:{SERVER_PORT}", flush=True)
-    app.run(host=SERVER_HOST, port=int(SERVER_PORT), debug=False)
+    app.run(host=SERVER_HOST, port=SERVER_PORT, debug=False)

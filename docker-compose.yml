@@ -11,8 +11,10 @@ services:
   server:
     build:
       context: .
+      args:
+        SERVER_PORT: ${SERVER_PORT:-5050}
     ports:
-      - 5050:5050
+      - "${SERVER_PORT:-5050}:${SERVER_PORT:-5050}"
 
 # The commented out section below is an example of how to define a PostgreSQL
 # database that your application can use. `depends_on` tells Docker Compose to
