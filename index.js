@@ -174,6 +174,11 @@ function applyCameraSelection(cameraName, options = {}) {
   }
 
   renderNearbyCameras();
+  
+  // Redraw map to highlight selected camera
+  if (mapCameraPoints && mapCameraPoints.length > 0) {
+    loadMapCameras();
+  }
 }
 
 async function loadMapCameras() {
@@ -207,13 +212,14 @@ async function loadMapCameras() {
     for (const camera of points) {
       if (typeof camera.x !== 'number' || typeof camera.y !== 'number') continue;
 
+      const isSelected = camera.location === currentCamera;
       const marker = L.circleMarker([camera.y, camera.x], {
         renderer,
-        radius: 5,
-        color: '#0f172a',
-        weight: 1,
-        fillColor: '#22c55e',
-        fillOpacity: 0.9
+        radius: isSelected ? 10 : 5,
+        color: isSelected ? '#ef4444' : '#0f172a',
+        weight: isSelected ? 3 : 1,
+        fillColor: isSelected ? '#fca5a5' : '#22c55e',
+        fillOpacity: isSelected ? 1 : 0.9
       });
 
       marker.bindTooltip(camera.location || 'Camera', {
