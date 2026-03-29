@@ -1,6 +1,6 @@
 # Eagle Eye Traffic Detector
 
-Eagle eye is a traffic detector that useS yolo computer vision model to detect VEHICLES from live camera feeds. Then it calculates the amount of traffic on the road based on multiple variables.
+Eagle Eye Traffic Detector is a traffic detector that uses YOLO computer vision model to detect vehicles from live camera feeds. Then it calculates the amount of traffic on the road based on multiple variables.
 
 ![Video Feed](https://i.luckyc.dev/eagleeye1.png)
 ![Stats](https://i.luckyc.dev/eagleeye2.png)
