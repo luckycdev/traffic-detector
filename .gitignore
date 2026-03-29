@@ -3,3 +3,4 @@ yolo*.pt
 anaconda_projects/
 .ipynb_checkpoints/
 __pycache__/
+.idea/

@@ -4,3 +4,4 @@ flask
 selenium
 numpy
 requests
+python-dotenv

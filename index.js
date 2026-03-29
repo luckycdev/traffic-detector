@@ -310,6 +310,9 @@ async function refreshStats() {
     document.getElementById('road_mask_percent').textContent = `${data.road_mask_percent.toFixed(2)}%`;
     document.getElementById('last_updated').textContent = data.last_updated || '-';
 
+    document.getElementById('movement_stopped').textContent = (data.movement_counts || {}).stopped || 0;
+    document.getElementById('movement_slow').textContent = (data.movement_counts || {}).slow || 0;
+    document.getElementById('movement_fast').textContent = (data.movement_counts || {}).fast || 0;
     const classList = document.getElementById('class_counts');
     classList.innerHTML = '';
     const entries = Object.entries(data.class_counts || {});

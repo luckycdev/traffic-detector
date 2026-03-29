@@ -1,4 +1,5 @@
 import cv2
+import math
 import os
 import time
 import re
@@ -7,35 +8,11 @@ from ultralytics import YOLO
 from flask import Flask, Response, jsonify, request, send_from_directory
 import numpy as np
 from threading import Lock, Thread
+from config import SERVER_HOST, SERVER_PORT, DEFAULT_STREAM_SOURCE, DEFAULT_CAMERA_NAME
 from get_cams import fetch_cameras
 from maps import load_camera_points
 
-
-def load_env_file(env_filename=".env"):
-    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), env_filename)
-    if not os.path.exists(env_path):
-        return
-
-    with open(env_path, "r", encoding="utf-8") as env_file:
-        for raw_line in env_file:
-            line = raw_line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, value = line.split("=", 1)
-            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
-
-
-load_env_file()
-
 app = Flask(__name__)
-
-SERVER_HOST = os.getenv("SERVER_HOST", "0.0.0.0")
-SERVER_PORT = int(os.getenv("SERVER_PORT", "5050"))
-DEFAULT_STREAM_SOURCE = os.getenv(
-    "DEFAULT_STREAM_SOURCE",
-    "https://traveler.modot.org/tisvc/api/Tms/CameraStream/K070EBIPC-14-LQ",
-)
-DEFAULT_CAMERA_NAME = os.getenv("DEFAULT_CAMERA_NAME", "I-70 EB At 18th St Expressway")
 
 VIDEO_SOURCE = os.getenv("VIDEO_SOURCE", DEFAULT_STREAM_SOURCE)
 
@@ -176,6 +153,50 @@ def traffic_rating(class_counts, coverage):
     return num_traffic_score_0_to_10, text_traffic_score
 
 
+def vehicle_movement_rating(current_positions, previous_positions,
+                            stopped_threshold=2.0, slow_threshold=15.0,
+                            max_match_distance=100.0):
+    """Returns count of vehicles classified as stopped, slow, or fast based on
+    pixel displacement between frames. Uses nearest-neighbor matching so it
+    works when ByteTrack cannot assign stable track IDs."""
+
+    # Stores count of vehicles in each movement category
+    movement_counts = {"stopped": 0, "slow": 0, "fast": 0}
+    if not previous_positions:
+        return movement_counts
+
+    # Copy so matched positions can be removed without modifying original
+    available = list(previous_positions)
+
+    for (cx, cy) in current_positions:
+        best_dist = float("inf")
+        best_idx = -1
+
+        # Find the closest previous position to this vehicle
+        for i, (px, py) in enumerate(available):
+            d = math.sqrt((cx - px) ** 2 + (cy - py) ** 2)
+            if d < best_dist:
+                best_dist = d
+                best_idx = i
+
+        # Skip if no match found or nearest match is too far away
+        if best_idx < 0 or best_dist > max_match_distance:
+            continue
+
+        # Remove matched position so it can't be matched again
+        available.pop(best_idx)
+
+        # Classify displacement
+        if best_dist < stopped_threshold:
+            movement_counts["stopped"] += 1
+        elif best_dist < slow_threshold:
+            movement_counts["slow"] += 1
+        else:
+            movement_counts["fast"] += 1
+
+    return movement_counts
+
+
 def get_empty_stats(camera_name):
     return {
         "vehicle_count": 0,
@@ -189,6 +210,7 @@ def get_empty_stats(camera_name):
         "frame_area": 0,
         "road_learning_ready": False,
         "class_counts": {},
+        "movement_counts": {"stopped": 0, "slow": 0, "fast": 0},
         "last_updated": "",
         "selected_camera": camera_name,
     }
@@ -234,6 +256,7 @@ class CameraWorker:
         smoothed_fps = 0.0
         previous_frame_time = None
         first_mask_seen_time = None
+        previous_positions = []
         generator_start_time = time.monotonic()
 
         while True:
@@ -295,9 +318,9 @@ class CameraWorker:
                 results = model.track(
                     frame,
                     persist = True,
-                    tracker = "bytetrack.yaml",
+                    tracker = os.path.join(os.path.dirname(__file__), "bytetrack.yaml"),
                     conf = 0.15,
-                    classes=[2,1,3,5,7]
+                    classes = [2, 3, 5, 7]
                 )
 
             if road_mask is None or road_mask.shape != (frame_height, frame_width):
@@ -317,6 +340,7 @@ class CameraWorker:
             boxes_area = 0
             vehicle_count = 0
             class_counts = {}
+            current_positions = []
 
             for result in results:
                 boxes = result.boxes
@@ -336,22 +360,56 @@ class CameraWorker:
                     class_name = model.names[cls]
                     class_counts[class_name] = class_counts.get(class_name, 0) + 1
 
+                    cx = (x1 + x2) / 2
+                    cy = (y1 + y2) / 2
+                    current_positions.append((cx, cy))
+
                     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
-                    label = f"{class_name} {conf*100:.0f}%"
+                    if track_id is not None:
+                        tid_text = f"ID {int(track_id)}"
+                        text_origin_x = x1
+                        text_origin_y = max(18, y1 - 8)
+                        (text_width, text_height), _ = cv2.getTextSize(
+                            tid_text,
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.55,
+                            2,
+                        )
+                        cv2.rectangle(
+                            frame,
+                            (text_origin_x - 2, text_origin_y - text_height - 6),
+                            (text_origin_x + text_width + 4, text_origin_y + 4),
+                            (0, 0, 0),
+                            -1,
+                        )
+                        cv2.putText(
+                            frame,
+                            tid_text,
+                            (text_origin_x, text_origin_y),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.55,
+                            (0, 255, 0),
+                            2,
+                        )
+
+                    label = f"{class_name} {conf:.2f}"
                     cv2.putText(
                         frame,
                         label,
-                        (x1, y1 - 10),
+                        (x1, min(frame_height - 8, y2 + 18)),
                         cv2.FONT_HERSHEY_SIMPLEX,
-                        0.5,
+                        0.45,
                         (0, 255, 0),
-                        2,
+                        1,
                     )
 
                     boxes_area += (x2 - x1) * (y2 - y1)
                     road_mask[y1:y2, x1:x2] = np.maximum(road_mask[y1:y2, x1:x2], 200)
                     road_mask_last_seen[y1:y2, x1:x2] = now
+
+            movement_counts = vehicle_movement_rating(current_positions, previous_positions)
+            previous_positions = current_positions
 
             road_area = np.count_nonzero(road_mask)
             if road_area > 0 and first_mask_seen_time is None:
@@ -392,6 +450,7 @@ class CameraWorker:
                 "frame_area": int(frame_area),
                 "road_learning_ready": bool(road_learning_ready),
                 "class_counts": class_counts,
+                "movement_counts": movement_counts,
                 "last_updated": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "selected_camera": self.camera_name,
             }
@@ -544,4 +603,4 @@ def stats():
 if __name__ == "__main__":
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
     print(f"Server running at http://{SERVER_HOST}:{SERVER_PORT}", flush=True)
-    app.run(host=SERVER_HOST, port=SERVER_PORT, debug=False)
+    app.run(host=SERVER_HOST, port=int(SERVER_PORT), debug=False)
