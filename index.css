@@ -136,10 +136,53 @@ img {
     margin: 0 0 8px;
 }
 
+.map-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.map-header h3 {
+    margin: 0;
+}
+
+.map-theme-toggle {
+    border: 1px solid #374151;
+    background: #111827;
+    color: #f3f4f6;
+    border-radius: 999px;
+    width: 36px;
+    height: 36px;
+    cursor: pointer;
+    font-family: "Segoe UI Symbol", "Noto Sans Symbols", sans-serif;
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.map-theme-toggle:hover {
+    border-color: #22c55e;
+}
+
 #camera_map {
     height: 420px;
     width: 100%;
     border: 1px solid #333;
     border-radius: 8px;
     overflow: hidden;
+}
+
+.leaflet-layer,
+.leaflet-control-zoom-in,
+.leaflet-control-zoom-out,
+.leaflet-control-attribution {
+    filter: none;
+}
+
+body.map-dark .leaflet-layer,
+body.map-dark .leaflet-control-zoom-in,
+body.map-dark .leaflet-control-zoom-out,
+body.map-dark .leaflet-control-attribution {
+    filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
 }

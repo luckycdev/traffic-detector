@@ -338,42 +338,15 @@ class CameraWorker:
 
                     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
-                    if track_id is not None:
-                        tid_text = f"ID {int(track_id)}"
-                        text_origin_x = x1
-                        text_origin_y = max(18, y1 - 8)
-                        (text_width, text_height), _ = cv2.getTextSize(
-                            tid_text,
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            0.55,
-                            2,
-                        )
-                        cv2.rectangle(
-                            frame,
-                            (text_origin_x - 2, text_origin_y - text_height - 6),
-                            (text_origin_x + text_width + 4, text_origin_y + 4),
-                            (0, 0, 0),
-                            -1,
-                        )
-                        cv2.putText(
-                            frame,
-                            tid_text,
-                            (text_origin_x, text_origin_y),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            0.55,
-                            (0, 255, 0),
-                            2,
-                        )
-
-                    label = f"{class_name} {conf:.2f}"
+                    label = f"{class_name} {conf*100:.0f}%"
                     cv2.putText(
                         frame,
                         label,
-                        (x1, min(frame_height - 8, y2 + 18)),
+                        (x1, y1 - 10),
                         cv2.FONT_HERSHEY_SIMPLEX,
-                        0.45,
+                        0.5,
                         (0, 255, 0),
-                        1,
+                        2,
                     )
 
                     boxes_area += (x2 - x1) * (y2 - y1)

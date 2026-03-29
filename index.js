@@ -8,6 +8,28 @@ let mapLayer = null;
 let mapCameraPoints = [];
 let mapCameraByName = {};
 let activeVideoCamera = null;
+let isMapDarkMode = false;
+
+function setMapTheme(isDarkMode) {
+  isMapDarkMode = Boolean(isDarkMode);
+  document.body.classList.toggle('map-dark', isMapDarkMode);
+
+  const mapThemeToggle = document.getElementById('map_theme_toggle');
+  if (!mapThemeToggle) return;
+  mapThemeToggle.textContent = isMapDarkMode ? '☾' : '☼';
+  mapThemeToggle.setAttribute('aria-label', isMapDarkMode ? 'Switch map to bright mode' : 'Switch map to dark mode');
+  mapThemeToggle.setAttribute('title', isMapDarkMode ? 'Switch map to bright mode' : 'Switch map to dark mode');
+}
+
+function initializeMapThemeToggle() {
+  const mapThemeToggle = document.getElementById('map_theme_toggle');
+  if (!mapThemeToggle) return;
+
+  setMapTheme(false);
+  mapThemeToggle.addEventListener('click', function () {
+    setMapTheme(!isMapDarkMode);
+  });
+}
 
 function updateVideoSource(cameraName) {
   const streamImage = document.getElementById('video_feed');
@@ -343,6 +365,7 @@ window.addEventListener('popstate', function () {
 });
 
 document.getElementById('camera_apply').addEventListener('click', switchCamera);
+initializeMapThemeToggle();
 loadCameras();
 loadMapCameras();
 if (!statsTimerId) {
