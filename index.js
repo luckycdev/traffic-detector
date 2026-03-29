@@ -51,6 +51,25 @@ function setCameraLoadingVisible(isVisible) {
   cameraLoading.style.display = isVisible ? 'block' : 'none';
 }
 
+function updateRawStreamLink(rawStreamUrl, cameraName) {
+  const streamLink = document.getElementById('raw_stream_link');
+  if (!streamLink) return;
+
+  const hasUrl = typeof rawStreamUrl === 'string'
+    && (rawStreamUrl.startsWith('http://') || rawStreamUrl.startsWith('https://'));
+
+  if (!hasUrl) {
+    streamLink.textContent = 'No stream';
+    streamLink.removeAttribute('href');
+    streamLink.style.pointerEvents = 'none';
+    return;
+  }
+
+  streamLink.href = rawStreamUrl;
+  streamLink.textContent = cameraName + " Stream" || 'Open Raw Stream';
+  streamLink.style.pointerEvents = 'auto';
+}
+
 function getCameraFromUrl() {
   const params = new URLSearchParams(window.location.search);
   return params.get('camera');
@@ -308,6 +327,7 @@ async function refreshStats() {
     //document.getElementById('raw_coverage').textContent = `${data.raw_coverage.toFixed(2)}%`;
     //document.getElementById('road_learning_ready').textContent = data.road_learning_ready ? 'Ready' : 'Not ready';
     document.getElementById('road_mask_percent').textContent = `${data.road_mask_percent.toFixed(2)}%`;
+    updateRawStreamLink(data.raw_stream_url, data.selected_camera || currentCamera);
     document.getElementById('last_updated').textContent = data.last_updated || '-';
 
     document.getElementById('movement_stopped').textContent = (data.movement_counts || {}).stopped || 0;

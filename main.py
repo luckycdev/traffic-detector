@@ -42,6 +42,13 @@ def normalize_video_source(source_value):
     return source_text
 
 
+def get_camera_raw_stream_url(camera_name):
+    stream_source = camera_sources.get(camera_name)
+    if isinstance(stream_source, str) and stream_source.startswith(("http://", "https://")):
+        return stream_source
+    return ""
+
+
 def extract_stream_from_html(html_value):
     if not html_value:
         return None
@@ -221,6 +228,7 @@ def get_empty_stats(camera_name):
         "movement_counts": {"stopped": 0, "slow": 0, "fast": 0},
         "last_updated": "",
         "selected_camera": camera_name,
+        "raw_stream_url": get_camera_raw_stream_url(camera_name),
     }
 
 
@@ -326,7 +334,8 @@ class CameraWorker:
                 results = model.predict(
                     frame,
                     conf = 0.15,
-                    classes = [2, 3, 5, 7]
+                    classes = [2, 3, 5, 7],
+                    verbose=False # stops the spam printing
                 )
 
             if road_mask is None or road_mask.shape != (frame_height, frame_width):
@@ -371,15 +380,26 @@ class CameraWorker:
 
                     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
-                    label = f"{class_name} {conf:.2f}"
+                    label = f"{class_name.title()} {conf*100:.0f}%"
                     cv2.putText(
                         frame,
                         label,
-                        (x1, min(frame_height - 8, y2 + 18)),
+                        (x1, y1 - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.45,
+                        (0, 0, 0),
+                        4,
+                        cv2.LINE_AA,
+                    )
+                    cv2.putText(
+                        frame,
+                        label,
+                        (x1, y1 - 10),
                         cv2.FONT_HERSHEY_SIMPLEX,
                         0.45,
                         (0, 255, 0),
-                        1,
+                        2,
+                        cv2.LINE_AA,
                     )
 
                     boxes_area += (x2 - x1) * (y2 - y1)
@@ -431,6 +451,7 @@ class CameraWorker:
                 "movement_counts": movement_counts,
                 "last_updated": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "selected_camera": self.camera_name,
+                "raw_stream_url": get_camera_raw_stream_url(self.camera_name),
             }
 
             with self.lock:

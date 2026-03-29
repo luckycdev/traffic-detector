@@ -31,6 +31,21 @@ img {
     gap: 10px;
 }
 
+.movement-wrap {
+    margin-top: 10px;
+}
+
+@media (min-width: 980px) {
+    .stats-wrap {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .movement-wrap {
+        max-width: 760px;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
 .stat-card {
     background: #1b1b1b;
     border: 1px solid #333;
@@ -70,9 +85,18 @@ img {
     color: #9aa0a6;
 }
 
+.raw-stream-link {
+    color: #9aa0a6;
+    transition: color 0.2s ease;
+}
+
+.raw-stream-link:hover {
+    color: #6b7280;
+}
+
 .controls {
     max-width: 1000px;
-    margin: 10px auto 0;
+    margin: 10px auto 18px;
     display: flex;
     gap: 8px;
     justify-content: center;
@@ -94,7 +118,7 @@ img {
 
 .nearby-section {
     max-width: 1000px;
-    margin: 14px auto 0;
+    margin: 22px auto 0;
     text-align: left;
     background: #1b1b1b;
     border: 1px solid #333;
@@ -110,7 +134,7 @@ img {
     margin-top: 8px;
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 12px;
 }
 
 .nearby-item {
