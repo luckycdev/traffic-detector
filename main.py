@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from get_cams import fetch_cameras
 from maps import load_camera_points
 
+# Load .env file
 load_dotenv()
 
 SERVER_HOST = os.getenv("SERVER_HOST", "0.0.0.0")
@@ -27,10 +28,10 @@ VIDEO_SOURCE = os.getenv("VIDEO_SOURCE", DEFAULT_STREAM_SOURCE)
 if VIDEO_SOURCE.isdigit():
     VIDEO_SOURCE = int(VIDEO_SOURCE)
 
-# Loading YOLO 26 nano
+# Loading YOLO 26 Nano
 model = YOLO(YOLO_MODEL)
 
-
+# Return string of camera stream
 def normalize_video_source(source_value):
     if isinstance(source_value, int):
         return source_value
@@ -41,14 +42,14 @@ def normalize_video_source(source_value):
         return int(source_text)
     return source_text
 
-
+# Return raw stream URL for frontend
 def get_camera_raw_stream_url(camera_name):
     stream_source = camera_sources.get(camera_name)
     if isinstance(stream_source, str) and stream_source.startswith(("http://", "https://")):
         return stream_source
     return ""
 
-
+# Return stream URL from regex
 def extract_stream_from_html(html_value):
     if not html_value:
         return None
@@ -71,7 +72,7 @@ def extract_stream_from_html(html_value):
 
     return None
 
-
+#Load camera sources from get_cams
 def load_camera_sources():
     camera_map = {}
     try:
@@ -88,11 +89,10 @@ def load_camera_sources():
 
     return camera_map
 
-
 camera_sources = load_camera_sources()
 default_source = normalize_video_source(VIDEO_SOURCE)
 
-
+# Get default camera name
 def resolve_default_camera_name():
     if DEFAULT_CAMERA_NAME in camera_sources:
         return DEFAULT_CAMERA_NAME
@@ -113,7 +113,7 @@ workers_lock = Lock()
 camera_workers = {}
 WORKER_IDLE_TIMEOUT_SECONDS = 10
 
-
+# Converts values to work with JSON
 def to_jsonable(value):
     if isinstance(value, dict):
         return {str(key): to_jsonable(val) for key, val in value.items()}
@@ -129,9 +129,8 @@ def to_jsonable(value):
         return float(value)
     return value
 
+# Calculates numerical (0-10) and text based traffic rating using formula based on vehicle coverage on road, vehicle type, and number of vehicles
 def traffic_rating(class_counts, coverage):
-    """Calculates numerical (0-10) and text based traffic rating using formula based on vehicle coverage
-    on road, vehicle type, and number of vehicles"""
     baseline_coverage = 6.5
 
     # Calculating adjusted coverage and max factoring in baseline_coverage to avoid skyrocketing scores
@@ -177,13 +176,10 @@ def traffic_rating(class_counts, coverage):
 
     return num_traffic_score_0_to_10, text_traffic_score
 
-
+# Returns count of vehicles classified as stopped, slow, or fast based on pixel displacement between frames. Uses nearest-neighbor matching to consistently track vehicles.
 def vehicle_movement_rating(current_positions, previous_positions,
                             stopped_threshold=0.5, slow_threshold=4.0,
                             max_match_distance=100.0):
-    """Returns count of vehicles classified as stopped, slow, or fast based on
-    pixel displacement between frames. Uses nearest-neighbor matching so it
-    works when ByteTrack cannot assign stable track IDs."""
 
     # Stores count of vehicles in each movement category
     movement_counts = {"stopped": 0, "slow": 0, "fast": 0}
@@ -221,9 +217,8 @@ def vehicle_movement_rating(current_positions, previous_positions,
 
     return movement_counts
 
-
+# Get empty stats for initialization
 def get_empty_stats(camera_name):
-    """Returns empty data for camera"""
     return {
         "vehicle_count": 0,
         "coverage": 0.0,
@@ -242,7 +237,7 @@ def get_empty_stats(camera_name):
         "raw_stream_url": get_camera_raw_stream_url(camera_name),
     }
 
-
+# Create CameraWorker class for creating seperate workers to run YOLO processing (for multiple users on multiple cameras)
 class CameraWorker:
     def __init__(self, camera_name, camera_source):
         self.camera_name = camera_name
@@ -256,25 +251,29 @@ class CameraWorker:
         self.thread = Thread(target=self.run, daemon=True)
         self.thread.start()
 
+    # Update last accessed time to keep worker alive while in use
     def touch(self):
         with self.lock:
             self.last_accessed = time.monotonic()
-
+    # Add a viewer when a new user connects to the stream
     def add_viewer(self):
         with self.lock:
             self.active_viewers += 1
             self.last_accessed = time.monotonic()
 
+    # Remove a viewer when a user disconnects from the stream
     def remove_viewer(self):
         with self.lock:
             self.active_viewers = max(0, self.active_viewers - 1)
             self.last_accessed = time.monotonic()
 
+    # Determines if worker should stop due to inactivity
     def should_stop(self):
         with self.lock:
             idle_seconds = time.monotonic() - self.last_accessed
             return self.active_viewers == 0 and idle_seconds > WORKER_IDLE_TIMEOUT_SECONDS
 
+    # Main loop for running YOLO processing
     def run(self):
         cam = cv2.VideoCapture(self.camera_source)
         road_mask = None
@@ -409,6 +408,8 @@ class CameraWorker:
                         4,
                         cv2.LINE_AA,
                     )
+
+                    # Text Shadow
                     cv2.putText(
                         frame,
                         label,
@@ -486,14 +487,14 @@ class CameraWorker:
             if camera_workers.get(self.camera_name) is self:
                 camera_workers.pop(self.camera_name, None)
 
-
+# Returns camera name
 def get_requested_camera_name():
     camera_name = request.args.get("camera", default_camera_name)
     if camera_name not in camera_sources:
         return default_camera_name
     return camera_name
 
-
+# Gets existing worker for camera or creates a new one
 def get_or_create_worker(camera_name):
     with workers_lock:
         worker = camera_workers.get(camera_name)
@@ -503,18 +504,7 @@ def get_or_create_worker(camera_name):
     worker.touch()
     return worker
 
-
-def get_existing_worker(camera_name):
-    with workers_lock:
-        worker = camera_workers.get(camera_name)
-        if worker is None:
-            return None
-        if not worker.thread.is_alive():
-            camera_workers.pop(camera_name, None)
-            return None
-        return worker
-
-
+# Send frames to frontend in a stream
 def stream_worker_frames(worker):
     last_sent_frame_id = -1
     worker.add_viewer()
@@ -538,32 +528,32 @@ def stream_worker_frames(worker):
     finally:
         worker.remove_viewer()
 
-
+# Flask route for homepage (index.html)
 @app.route("/")
 def index():
     root_dir = os.path.dirname(os.path.abspath(__file__))
     return send_from_directory(root_dir, "index.html")
 
-
+# Flask route for CSS file
 @app.route("/index.css")
 def index_css():
     root_dir = os.path.dirname(os.path.abspath(__file__))
     return send_from_directory(root_dir, "index.css")
 
-
+# Flask route for JS file
 @app.route("/index.js")
 def index_js():
     root_dir = os.path.dirname(os.path.abspath(__file__))
     return send_from_directory(root_dir, "index.js")
 
-
+# Flask route for video feed
 @app.route("/video_feed")
 def video_feed():
     camera_name = get_requested_camera_name()
     worker = get_or_create_worker(camera_name)
     return Response(stream_worker_frames(worker), mimetype="multipart/x-mixed-replace; boundary=frame")
 
-
+# Flask route to get list of cameras and selected camera
 @app.route("/cameras")
 def cameras():
     return jsonify(
@@ -573,7 +563,7 @@ def cameras():
         }
     )
 
-
+# Flask route to get camera locations for map and selected camera
 @app.route("/map_cameras")
 def map_cameras():
     try:
@@ -588,7 +578,7 @@ def map_cameras():
         }
     )
 
-
+# Flask route to select camera
 @app.route("/select_camera", methods=["POST"])
 def select_camera():
     data = request.get_json(silent=True) or {}
@@ -599,7 +589,7 @@ def select_camera():
 
     return jsonify({"ok": True, "selected_camera": selected_camera})
 
-
+# Flask route to get latest stats for selected camera
 @app.route("/stats")
 def stats():
     camera_name = get_requested_camera_name()
@@ -618,7 +608,7 @@ def stats():
     response.headers["Expires"] = "0"
     return response
 
-
+# Main function to start Flask server
 if __name__ == "__main__":
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
     print(f"Server running at http://{SERVER_HOST}:{SERVER_PORT}", flush=True)

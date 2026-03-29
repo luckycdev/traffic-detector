@@ -1,6 +1,6 @@
 from get_cams import fetch_cameras
 
-
+# Load camera points on map
 def load_camera_points(allowed_locations=None):
     allowed = set(allowed_locations) if allowed_locations else None
     camera_points = []

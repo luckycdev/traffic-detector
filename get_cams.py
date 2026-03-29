@@ -2,6 +2,7 @@ import requests
 import os
 from dotenv import load_dotenv
 
+# Load .env file
 load_dotenv()
 
 CAMERAS_JSON_URL = os.getenv(
@@ -9,6 +10,7 @@ CAMERAS_JSON_URL = os.getenv(
     "https://traveler.modot.org/timconfig/feed/desktop/StreamingCams2.json",
 )
 
+# Returns a dictionary of cameras with their name, location, and stream url
 def fetch_cameras():
     response = requests.get(CAMERAS_JSON_URL)
     response.raise_for_status()  # will raise error if request fails
@@ -25,6 +27,7 @@ def fetch_cameras():
     
     return cam_dict
 
+# Ran if running this file directly, prints cameras
 if __name__ == "__main__":
     cameras = fetch_cameras()
     for loc, data in cameras.items():
