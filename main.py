@@ -27,7 +27,7 @@ VIDEO_SOURCE = os.getenv("VIDEO_SOURCE", DEFAULT_STREAM_SOURCE)
 if VIDEO_SOURCE.isdigit():
     VIDEO_SOURCE = int(VIDEO_SOURCE)
 
-# YOLO 26 nano
+# Loading YOLO 26 nano
 model = YOLO(YOLO_MODEL)
 
 
@@ -134,28 +134,38 @@ def traffic_rating(class_counts, coverage):
     on road, vehicle type, and number of vehicles"""
     baseline_coverage = 6.5
 
+    # Calculating adjusted coverage and max factoring in baseline_coverage to avoid skyrocketing scores
     adjusted_coverage = max(coverage - baseline_coverage, 0)
     adjusted_max = 100 - baseline_coverage
 
+    # Setting different calculation weights for different vehciles to
+    # factor in how they affect traffic differently
     car_wt = 1.0
     motorcycle_wt = 0.5
     bus_wt = 2.5
     truck_wt = 3.0
 
+    # Getting how many of each vehicle type are detected, otherwise defaulting to 0
+    # to avoid errors
     car_count = class_counts.get("car", 0)
     motorcycle_count = class_counts.get("motorcycle", 0)
     bus_count = class_counts.get("bus", 0)
     truck_count = class_counts.get("truck", 0)
     total_count = car_count + motorcycle_count + bus_count + truck_count
 
+    # Calculating weighted_factor which considers the number of each vehicle type, their calculation weight
+    # and the total number of vehicles
     weighted_count = (car_count * car_wt) + (motorcycle_count * motorcycle_wt) + (bus_count * bus_wt) + (truck_count * truck_wt)
     weight_factor = weighted_count / max(total_count, 1.0)
 
+    # Numerical traffic score calculated (between 0 and 1)
     num_traffic_score = (adjusted_coverage / adjusted_max) * weight_factor
 
-    # scale to 0-10 range
+    # Scales numerical traffic score to 0-10 range
     num_traffic_score_0_to_10 = min(num_traffic_score * 10, 10)
 
+    # Converts numerical traffic score to text-based traffic rating
+    # using thresholds
     if num_traffic_score_0_to_10 <= 2.5:
         text_traffic_score = "Light Traffic"
     elif num_traffic_score_0_to_10 <= 5.0:
@@ -201,7 +211,7 @@ def vehicle_movement_rating(current_positions, previous_positions,
         # Remove matched position so it can't be matched again
         available.pop(best_idx)
 
-        # Classify displacement
+        # Classify displacement and add 1 to dictionary for each displacement type
         if best_dist < stopped_threshold:
             movement_counts["stopped"] += 1
         elif best_dist < slow_threshold:
@@ -213,6 +223,7 @@ def vehicle_movement_rating(current_positions, previous_positions,
 
 
 def get_empty_stats(camera_name):
+    """Returns empty data for camera"""
     return {
         "vehicle_count": 0,
         "coverage": 0.0,
@@ -331,6 +342,7 @@ class CameraWorker:
             previous_frame_time = frame_time
 
             with model_lock:
+                # Setting Yolo parameters including what objects it detects and its confidence threshold (15%)
                 results = model.predict(
                     frame,
                     conf = 0.15,
@@ -352,16 +364,20 @@ class CameraWorker:
                 road_mask[road_mask < 5] = 0
                 road_mask_last_seen[road_mask == 0] = 0.0
 
+            # Creating variables that store information about the size of the Yolo
+            # bounding boxes, number of detected vehicles, their type, and their positions
             boxes_area = 0
             vehicle_count = 0
             class_counts = {}
             current_positions = []
 
+            # Processes each frame
             for result in results:
                 boxes = result.boxes
                 if boxes is None:
                     continue
 
+                # Processes each Yolo bounding box
                 for box in boxes:
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
                     conf = float(box.conf[0])
@@ -374,12 +390,14 @@ class CameraWorker:
                     class_name = model.names[cls]
                     class_counts[class_name] = class_counts.get(class_name, 0) + 1
 
+                    # Calculating change in x and y for displacement calculation function
                     cx = (x1 + x2) / 2
                     cy = (y1 + y2) / 2
                     current_positions.append((cx, cy))
 
                     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
+                    # Drawing Yolo bounding boxes with class name and confidence level on frame
                     label = f"{class_name.title()} {conf*100:.0f}%"
                     cv2.putText(
                         frame,
@@ -425,6 +443,7 @@ class CameraWorker:
             smoothed_coverage = smoothed_coverage * 0.8 + effective_coverage * 0.2
             coverage = smoothed_coverage
 
+            # Calculating numerical and text-based traffic score
             traffic_score, traffic_label = traffic_rating(class_counts, coverage)
 
             mask_colored = cv2.cvtColor(road_mask, cv2.COLOR_GRAY2BGR)
@@ -434,6 +453,7 @@ class CameraWorker:
             if not ok:
                 continue
 
+            # Storing important Yolo and traffic detection information
             stats_snapshot = {
                 "vehicle_count": vehicle_count,
                 "coverage": round(coverage, 2),
