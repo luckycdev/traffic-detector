@@ -1,5 +1,11 @@
 # Eagle Eye Traffic Detector
 
+Eagle eye is a traffic detector that useS yolo computer vision model to detect VEHICLES from live camera feeds. Then it calculates the amount of traffic on the road based on multiple variables.
+
+![Video Feed](https://i.luckyc.dev/eagleeye1.png)
+![Stats](https://i.luckyc.dev/eagleeye2.png)
+![Map](https://i.luckyc.dev/eagleeye3.png)
+
 ## Installation
 
 You need Docker, docker-compose and git setup on your machine (Refer to [Docker documentation](https://docs.docker.com/) if you need any help with this)
