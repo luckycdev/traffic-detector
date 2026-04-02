@@ -20,6 +20,24 @@ SERVER_PORT = os.getenv("SERVER_PORT", "5050")
 DEFAULT_STREAM_SOURCE = os.getenv("DEFAULT_STREAM_SOURCE", "0")
 DEFAULT_CAMERA_NAME = os.getenv("DEFAULT_CAMERA_NAME", "Default Camera")
 YOLO_MODEL = os.getenv("YOLO_MODEL", "yolo26n.pt")
+YOLO_CONFIDENCE = float(os.getenv("YOLO_CONFIDENCE", "0.15"))
+YOLO_CLASS_IDS = [int(item.strip()) for item in os.getenv("YOLO_CLASS_IDS", "2,3,5,7").split(",") if item.strip()]
+MIN_BOX_BOTTOM_Y_RATIO = float(os.getenv("MIN_BOX_BOTTOM_Y_RATIO", "0.3"))
+WORKER_IDLE_TIMEOUT_SECONDS = int(os.getenv("WORKER_IDLE_TIMEOUT_SECONDS", "10"))
+MOVEMENT_STOPPED_THRESHOLD_PIXELS = float(os.getenv("MOVEMENT_STOPPED_THRESHOLD_PIXELS", "0.5"))
+MOVEMENT_SLOW_THRESHOLD_PIXELS = float(os.getenv("MOVEMENT_SLOW_THRESHOLD_PIXELS", "4.0"))
+MOVEMENT_MAX_MATCH_DISTANCE_PIXELS = float(os.getenv("MOVEMENT_MAX_MATCH_DISTANCE_PIXELS", "100.0"))
+ROAD_MASK_STALE_SECONDS = float(os.getenv("ROAD_MASK_STALE_SECONDS", "5.0"))
+ROAD_MASK_WARMUP_SECONDS = float(os.getenv("ROAD_MASK_WARMUP_SECONDS", "0.5"))
+ROAD_MASK_FADE_MULTIPLIER = float(os.getenv("ROAD_MASK_FADE_MULTIPLIER", "0.95"))
+ROAD_MASK_MIN_VALUE = int(os.getenv("ROAD_MASK_MIN_VALUE", "5"))
+ROAD_LEARNING_MIN_FRAME_RATIO = float(os.getenv("ROAD_LEARNING_MIN_FRAME_RATIO", "0.05"))
+FPS_SMOOTHING_ALPHA = float(os.getenv("FPS_SMOOTHING_ALPHA", "0.2"))
+COVERAGE_SMOOTHING_ALPHA = float(os.getenv("COVERAGE_SMOOTHING_ALPHA", "0.2"))
+TRAFFIC_BASELINE_COVERAGE = float(os.getenv("TRAFFIC_BASELINE_COVERAGE", "6.5"))
+TRAFFIC_LIGHT_MAX = float(os.getenv("TRAFFIC_LIGHT_MAX", "2.5"))
+TRAFFIC_MODERATE_MAX = float(os.getenv("TRAFFIC_MODERATE_MAX", "5.0"))
+TRAFFIC_HEAVY_MAX = float(os.getenv("TRAFFIC_HEAVY_MAX", "7.5"))
 
 app = Flask(__name__)
 
@@ -28,7 +46,7 @@ VIDEO_SOURCE = os.getenv("VIDEO_SOURCE", DEFAULT_STREAM_SOURCE)
 if VIDEO_SOURCE.isdigit():
     VIDEO_SOURCE = int(VIDEO_SOURCE)
 
-# Loading YOLO 26 Nano
+# Loading YOLO model from .env (default is YOLO 26 Nano)
 model = YOLO(YOLO_MODEL)
 
 # Return string of camera stream
@@ -111,7 +129,6 @@ default_camera_name = resolve_default_camera_name()
 model_lock = Lock()
 workers_lock = Lock()
 camera_workers = {}
-WORKER_IDLE_TIMEOUT_SECONDS = 10
 
 # Converts values to work with JSON
 def to_jsonable(value):
@@ -131,7 +148,7 @@ def to_jsonable(value):
 
 # Calculates numerical (0-10) and text based traffic rating using formula based on vehicle coverage on road, vehicle type, and number of vehicles
 def traffic_rating(class_counts, coverage):
-    baseline_coverage = 6.5
+    baseline_coverage = TRAFFIC_BASELINE_COVERAGE
 
     # Calculating adjusted coverage and max factoring in baseline_coverage to avoid skyrocketing scores
     adjusted_coverage = max(coverage - baseline_coverage, 0)
@@ -165,11 +182,11 @@ def traffic_rating(class_counts, coverage):
 
     # Converts numerical traffic score to text-based traffic rating
     # using thresholds
-    if num_traffic_score_0_to_10 <= 2.5:
+    if num_traffic_score_0_to_10 <= TRAFFIC_LIGHT_MAX:
         text_traffic_score = "Light Traffic"
-    elif num_traffic_score_0_to_10 <= 5.0:
+    elif num_traffic_score_0_to_10 <= TRAFFIC_MODERATE_MAX:
         text_traffic_score = "Moderate Traffic"
-    elif num_traffic_score_0_to_10 <= 7.5:
+    elif num_traffic_score_0_to_10 <= TRAFFIC_HEAVY_MAX:
         text_traffic_score = "Heavy Traffic"
     else:
         text_traffic_score = "Very Heavy Traffic"
@@ -178,8 +195,8 @@ def traffic_rating(class_counts, coverage):
 
 # Returns count of vehicles classified as stopped, slow, or fast based on pixel displacement between frames. Uses nearest-neighbor matching to consistently track vehicles.
 def vehicle_movement_rating(current_positions, previous_positions,
-                            stopped_threshold=0.5, slow_threshold=4.0,
-                            max_match_distance=100.0):
+                            stopped_threshold=MOVEMENT_STOPPED_THRESHOLD_PIXELS, slow_threshold=MOVEMENT_SLOW_THRESHOLD_PIXELS,
+                            max_match_distance=MOVEMENT_MAX_MATCH_DISTANCE_PIXELS):
 
     # Stores count of vehicles in each movement category
     movement_counts = {"stopped": 0, "slow": 0, "fast": 0}
@@ -337,15 +354,15 @@ class CameraWorker:
                 delta_seconds = frame_time - previous_frame_time
                 if delta_seconds > 0:
                     instant_fps = 1.0 / delta_seconds
-                    smoothed_fps = smoothed_fps * 0.8 + instant_fps * 0.2
+                    smoothed_fps = smoothed_fps * (1.0 - FPS_SMOOTHING_ALPHA) + instant_fps * FPS_SMOOTHING_ALPHA
             previous_frame_time = frame_time
 
             with model_lock:
                 # Setting Yolo parameters including what objects it detects and its confidence threshold (15%)
                 results = model.predict(
                     frame,
-                    conf = 0.15,
-                    classes = [2, 3, 5, 7],
+                    conf = YOLO_CONFIDENCE,
+                    classes = YOLO_CLASS_IDS,
                     verbose=False # stops the spam printing
                 )
 
@@ -356,11 +373,11 @@ class CameraWorker:
 
             now = time.monotonic() - generator_start_time
 
-            stale_mask = (road_mask > 0) & ((now - road_mask_last_seen) > 5.0)
+            stale_mask = (road_mask > 0) & ((now - road_mask_last_seen) > ROAD_MASK_STALE_SECONDS)
             if np.any(stale_mask):
-                faded_values = (road_mask[stale_mask].astype(np.float32) * 0.95).astype(np.uint8)
+                faded_values = (road_mask[stale_mask].astype(np.float32) * ROAD_MASK_FADE_MULTIPLIER).astype(np.uint8)
                 road_mask[stale_mask] = faded_values
-                road_mask[road_mask < 5] = 0
+                road_mask[road_mask < ROAD_MASK_MIN_VALUE] = 0
                 road_mask_last_seen[road_mask == 0] = 0.0
 
             # Creating variables that store information about the size of the Yolo
@@ -382,7 +399,7 @@ class CameraWorker:
                     conf = float(box.conf[0])
                     cls = int(box.cls[0])
 
-                    if y2 < frame_height * 0.3:
+                    if y2 < frame_height * MIN_BOX_BOTTOM_Y_RATIO:
                         continue
 
                     vehicle_count += 1
@@ -435,13 +452,13 @@ class CameraWorker:
                 first_mask_seen_time = None
 
             coverage_warmup_done = (
-                first_mask_seen_time is not None and (now - first_mask_seen_time) >= 0.5
+                first_mask_seen_time is not None and (now - first_mask_seen_time) >= ROAD_MASK_WARMUP_SECONDS
             )
             road_mask_percent = (road_area / frame_area) * 100 if frame_area > 0 else 0
-            road_learning_ready = road_area > frame_area * 0.05
+            road_learning_ready = road_area > frame_area * ROAD_LEARNING_MIN_FRAME_RATIO
             raw_coverage = (boxes_area / road_area) * 100 if road_area > 0 and coverage_warmup_done else 0
             effective_coverage = raw_coverage if road_learning_ready else 0
-            smoothed_coverage = smoothed_coverage * 0.8 + effective_coverage * 0.2
+            smoothed_coverage = smoothed_coverage * (1.0 - COVERAGE_SMOOTHING_ALPHA) + effective_coverage * COVERAGE_SMOOTHING_ALPHA
             coverage = smoothed_coverage
 
             # Calculating numerical and text-based traffic score

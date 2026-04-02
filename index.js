@@ -339,7 +339,7 @@ async function refreshStats() {
     if (!entries.length) {
       const li = document.createElement('li');
       li.className = 'muted';
-      li.textContent = 'No vehicles detected in current frame';
+      li.textContent = 'No vehicles detected';
       classList.appendChild(li);
     } else {
       entries.sort((a, b) => b[1] - a[1]);

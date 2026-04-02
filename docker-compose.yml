@@ -1,11 +1,10 @@
 services:
-# Server pulls ports from .env file
   server:
     build:
       context: .
       args:
-        SERVER_PORT: ${SERVER_PORT:-5050}
+        SERVER_PORT: ${SERVER_PORT:-5050} # Uses SERVER_PORT from .env if set, otherwise defaults to 5050
     ports:
-      - "${SERVER_PORT:-5050}:${SERVER_PORT:-5050}"
+      - "${SERVER_PORT:-5050}:${SERVER_PORT:-5050}" # Maps the same port from container to host
 
 

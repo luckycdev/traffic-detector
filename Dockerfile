@@ -3,7 +3,7 @@ FROM python:3.11-slim
 # Defaults port to 5050
 ARG SERVER_PORT=5050
 
-# use port in .env if changed
+# Use port from docker-compose if present (either 5050 or SERVER_PORT from .env)
 ENV SERVER_PORT=${SERVER_PORT}
 
 WORKDIR /app
@@ -15,15 +15,15 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-# Pull and install required tools and libraries from txt file
+# Install Python dependencies from requirements.txt
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy files from local machine into docker container
+# Copy project files into the container
 COPY . .
 
-# Tells docker to use specified port (default is 5050)
+# Records which port the app listens on
 EXPOSE ${SERVER_PORT}
 
-# Execute both python and main application file
+# Run main.py on container startup
 CMD ["python", "main.py"]
